@@ -10,12 +10,16 @@ public enum RhythmPoolID
 {
     NoteShape0, // 默认圆形
     NoteShape1, // 方块
-    NoteShape2  // 菱形/其他
+    NoteShape2,  // 菱形/其他
+    
+    HitEffectShape0 = 3, // 圆形特效
+    HitEffectShape1 = 4, // 方形特效
+    HitEffectShape2 = 5  // 特殊形状特效
 }
 
 public class ChartManager : MonoBehaviour
 {
-    public TextAsset chartJsonFile; 
+    public static ChartManager Instance { get; private set; }
     
     [Header("视觉资源配置")]
     [Tooltip("放入对应的音符Prefab，下标0对应Shape0")]
@@ -23,6 +27,9 @@ public class ChartManager : MonoBehaviour
     public GameObject trackPrefab;
     [Tooltip("判定点形状图片，下标0对应Shape0")]
     public Sprite[] judgeSprites;
+    
+    [Tooltip("放入对应的击打特效Prefab，下标0对应Shape0")]
+    public PoolableObject[] hitEffectPrefabs;
 
     [Header("材质配置")]
     public Material normalMat; // 普通材质
@@ -30,9 +37,13 @@ public class ChartManager : MonoBehaviour
 
     public ChartData currentChart;
 
+    void Awake()
+    {
+        if (Instance == null) Instance = this;
+    }
+    
     void Start()
     {
-        // 2. 批量注册所有音符预制体到各自的对象池
         if (notePrefabs != null)
         {
             for (int i = 0; i < notePrefabs.Length; i++)
@@ -43,28 +54,35 @@ public class ChartManager : MonoBehaviour
                 }
             }
         }
-        LoadChart();
-        SpawnEntities();
-    }
-
-    void LoadChart()
-    {
-        if (chartJsonFile != null)
+        
+        // 【新增】批量注册打击特效预制体到对象池
+        if (hitEffectPrefabs != null)
         {
-            // 将 JSON 文本解析为 ChartData 对象
-            currentChart = JsonUtility.FromJson<ChartData>(chartJsonFile.text);
-            Debug.Log($"成功加载谱面！包含 {currentChart.tracks.Count} 条轨迹，和 {currentChart.notes.Count} 个音符。");
-        }
-        else
-        {
-            Debug.LogError("没有找到谱面文件！请检查 Chart Json File 是否已经在面板上赋值。");
+            for (int i = 0; i < hitEffectPrefabs.Length; i++)
+            {
+                if (hitEffectPrefabs[i] != null)
+                {
+                    // 注意这里的枚举强转，巧妙地利用了 +3 的偏移量对应特效池
+                    ObjectPool.EnsurePrefabRegistered((RhythmPoolID)(i + 3), hitEffectPrefabs[i].gameObject, 20);
+                }
+            }
         }
     }
 
-    void SpawnEntities()
+    public void LoadAndSpawnChart(TextAsset chartJsonAsset)
     {
+        if (chartJsonAsset == null) return;
+
+        // 解析 JSON
+        currentChart = JsonUtility.FromJson<ChartData>(chartJsonAsset.text);
+        Debug.Log($"加载谱面：{currentChart.songName}");
+        
+        // 将 JSON 存入 GameManager 以便 Restart 重玩时使用
+        GameManager.currentPlayingChart = chartJsonAsset;
+
+        // ... 原本 SpawnEntities() 里的所有代码原封不动地放在这里 ...
         if (currentChart == null) return;
-        ScoreManager.Init(currentChart.notes.Count, currentChart.songName);
+        ScoreManager.Init(currentChart.notes.Count, currentChart.songName, currentChart.uiConfig);
 
         EntityManager entityManager = World.DefaultGameObjectInjectionWorld.EntityManager;
         Dictionary<int, TrackData> trackDict = new Dictionary<int, TrackData>();

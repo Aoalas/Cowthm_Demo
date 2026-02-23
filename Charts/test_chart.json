@@ -1,6 +1,10 @@
 {
   "songName": "Cybernetic Rush",
   "chartSpeed": 5.5,
+  "uiConfig": {
+    "hideCombo": false,
+    "disableComplete": false
+  },
   "tracks": [
     { "trackId": 0, "startX": -3.0, "startY": 6.0, "endX": -3.0, "endY": -3.0, "width": 0.15, "opacity": 1.0, "isGlow": true, "rotation": 0.0, "judgeShape": 0 },
     { "trackId": 1, "startX": -1.0, "startY": 6.0, "endX": -1.0, "endY": -3.0, "width": 0.15, "opacity": 0.5, "isGlow": false, "rotation": 0.0, "judgeShape": 0 },

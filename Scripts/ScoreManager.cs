@@ -5,40 +5,65 @@ public static class ScoreManager
 {
     public static float CurrentScore { get; private set; }
     public static int Combo { get; private set; }
+    public static int MaxCombo { get; private set; } // 【新增】最大连击数
+    
+    // 【新增】详细判定统计，用于结算面板
+    public static int PerfectCount { get; private set; }
+    public static int GoodCount { get; private set; }
+    public static int MissCount { get; private set; }
+
     public const int MAX_SCORE = 1000000;
     private static float scorePerNote;
 
-    // 【新增】追踪谱面完成度
     private static int totalNotesCount;
     private static int processedNotesCount;
 
     public static Action<int, int> OnScoreUpdated;
-    public static Action<string> OnGameStart; 
+    public static Action<string, ChartUIConfig> OnGameStart;
     public static Action OnGameComplete;
 
-    public static void Init(int totalNotes, string songName) 
+    public static void Init(int totalNotes, string songName, ChartUIConfig uiConfig)
     {
         CurrentScore = 0f;
         Combo = 0;
-        scorePerNote = totalNotes > 0 ? (float)MAX_SCORE / totalNotes : 0f;
+        MaxCombo = 0;
+        PerfectCount = 0;
+        GoodCount = 0;
+        MissCount = 0;
         
-        // 初始化进度
+        scorePerNote = totalNotes > 0 ? (float)MAX_SCORE / totalNotes : 0f;
         totalNotesCount = totalNotes;
         processedNotesCount = 0;
 
-        OnGameStart?.Invoke(songName);
+        OnGameStart?.Invoke(songName, uiConfig);
         OnScoreUpdated?.Invoke(0, 0);
     }
 
     public static void AddHit(string judgment)
     {
-        if (judgment == "Perfect") { CurrentScore += scorePerNote; Combo++; }
-        else if (judgment == "Good") { CurrentScore += scorePerNote * 0.5f; Combo++; }
-        else if (judgment == "Miss") { Combo = 0; }
+        if (judgment == "Perfect") 
+        { 
+            CurrentScore += scorePerNote; 
+            Combo++; 
+            PerfectCount++; 
+        }
+        else if (judgment == "Good") 
+        { 
+            CurrentScore += scorePerNote * 0.5f; 
+            Combo++; 
+            GoodCount++; 
+        }
+        else if (judgment == "Miss") 
+        { 
+            Combo = 0; 
+            MissCount++; 
+        }
+
+        // 刷新最大连击
+        if (Combo > MaxCombo) MaxCombo = Combo;
 
         OnScoreUpdated?.Invoke(Mathf.RoundToInt(CurrentScore), Combo);
 
-        // 【新增】每次判定后，处理数量+1。当处理完所有音符，触发结束事件
         processedNotesCount++;
         if (processedNotesCount >= totalNotesCount)
         {

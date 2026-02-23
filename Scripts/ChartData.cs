@@ -1,6 +1,14 @@
 using System.Collections.Generic;
 
 [System.Serializable]
+public class ChartUIConfig
+{
+    public bool hideCombo = false;           // 是否强制隐藏 COMBO
+    public bool disableComplete = false;
+    // 未来还可以加：背景图名、主题色等...
+}
+
+[System.Serializable]
 public class TrackData
 {
     public int trackId;
@@ -38,6 +46,8 @@ public class ChartData
 {
     public string songName = "Unknown Song";
     public float chartSpeed = 2.0f;
+    
+    public ChartUIConfig uiConfig;
     
     public List<TrackData> tracks;
     public List<NoteData> notes;

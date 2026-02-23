@@ -10,7 +10,9 @@ public partial class NoteVisualSystem : SystemBase
 
     protected override void OnUpdate()
     {
-        float currentTime = (float)SystemAPI.Time.ElapsedTime;
+        if (GameManager.Instance == null || GameManager.Instance.CurrentState != GameState.Playing) return;
+        
+        float currentTime = GameManager.Instance.CurrentGameTime;
         
         foreach (var (note, pos, view) in SystemAPI.Query<RefRO<NoteComponent>, RefRO<NotePosition>, NoteViewComponent>())
         {
