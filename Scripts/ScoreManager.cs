@@ -5,9 +5,8 @@ public static class ScoreManager
 {
     public static float CurrentScore { get; private set; }
     public static int Combo { get; private set; }
-    public static int MaxCombo { get; private set; } // 【新增】最大连击数
+    public static int MaxCombo { get; private set; }
     
-    // 【新增】详细判定统计，用于结算面板
     public static int PerfectCount { get; private set; }
     public static int GoodCount { get; private set; }
     public static int MissCount { get; private set; }
@@ -58,8 +57,7 @@ public static class ScoreManager
             Combo = 0; 
             MissCount++; 
         }
-
-        // 刷新最大连击
+        
         if (Combo > MaxCombo) MaxCombo = Combo;
 
         OnScoreUpdated?.Invoke(Mathf.RoundToInt(CurrentScore), Combo);

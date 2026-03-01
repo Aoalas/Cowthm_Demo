@@ -9,49 +9,121 @@ public partial class NoteInputSystem : SystemBase
 {
     private readonly KeyCode[] trackKeys = new KeyCode[] { KeyCode.S, KeyCode.D, KeyCode.J, KeyCode.K };
 
+    // 定义一个轨道信息结构体，用于存储向量
+    private struct TrackInfo
+    {
+        public float2 StartPos;
+        public float2 EndPos;
+        public float2 Dir;  // 轨道方向向量
+        public float2 Norm; // 垂直于轨道的法向向量
+    }
+
     protected override void OnUpdate()
     {
-        // 【新增拦截】必须处于游玩状态才接受输入并结算 Miss
         if (GameManager.Instance == null || GameManager.Instance.CurrentState != GameState.Playing) return;
 
-        // 【修改时间源】
-        float currentTime = GameManager.Instance.CurrentGameTime;
+        float currentTime = GameManager.Instance.CurrentAudioTime;
         var ecb = new EntityCommandBuffer(Allocator.Temp);
 
-        // ==========================================
-        // 1. 移动端多点触控检测
-        // ==========================================
-        for (int i = 0; i < Input.touchCount; i++)
-        {
-            Touch touch = Input.GetTouch(i);
-            // 只有当手指刚刚按下的那一帧，才触发判定
-            if (touch.phase == TouchPhase.Began)
-            {
-                // 将屏幕宽度分为4等份，计算当前触摸点落在哪个轨道 (0, 1, 2, 3)
-                float screenWidth = Screen.width;
-                int trackId = (int)((touch.position.x / screenWidth) * 4);
-                trackId = math.clamp(trackId, 0, 3); // 确保不越界
+        NativeHashSet<Entity> processedEntities = new NativeHashSet<Entity>(32, Allocator.Temp);
 
-                TryHitNote(trackId, currentTime, ref ecb);
+        // ==========================================
+        // 【核心数学升级】：计算每条轨道的方向向量与法向量
+        // ==========================================
+        NativeArray<TrackInfo> trackInfos = new NativeArray<TrackInfo>(4, Allocator.Temp);
+        
+        // 赋默认值防错
+        for (int i = 0; i < 4; i++)
+        {
+            trackInfos[i] = new TrackInfo { 
+                StartPos = new float2(-3 + i*2, 6), 
+                EndPos = new float2(-3 + i*2, -3), 
+                Dir = new float2(0, 1), 
+                Norm = new float2(1, 0) 
+            };
+        }
+
+        foreach (var track in SystemAPI.Query<RefRO<TrackComponent>>())
+        {
+            int tId = track.ValueRO.TrackId;
+            if(tId >= 0 && tId < 4)
+            {
+                float2 s = track.ValueRO.StartPos;
+                float2 e = track.ValueRO.EndPos;
+                
+                // 算出沿着轨道的方向向量 (从终点指向起点)
+                float2 dir = math.normalizesafe(s - e); 
+                // 算出垂直于轨道的法向量
+                float2 norm = new float2(-dir.y, dir.x); 
+                
+                trackInfos[tId] = new TrackInfo { StartPos = s, EndPos = e, Dir = dir, Norm = norm };
             }
         }
 
-        // ==========================================
-        // 2. 电脑键盘检测 (用于 Editor 测试)
-        // ==========================================
+        Camera mainCam = Camera.main;
+        
+
+
+        float maxTransverseDist = 1.20f; 
+        
+        // 纵向长度：沿着轨道方向的距离。设为 2.5 甚至 3.0，
+        float maxLongitudinalDist = 6.0f; 
+
+        // 移动端多点触控精准检测
+        for (int i = 0; i < Input.touchCount; i++)
+        {
+            Touch touch = Input.GetTouch(i);
+            if (touch.phase == TouchPhase.Began && mainCam != null)
+            {
+                Vector3 worldPos = mainCam.ScreenToWorldPoint(new Vector3(touch.position.x, touch.position.y, Mathf.Abs(mainCam.transform.position.z)));
+                float2 touchPos = new float2(worldPos.x, worldPos.y);
+
+                int hitTrackId = -1;
+                float minTransDist = float.MaxValue;
+
+                // 判断手指到底属于哪条轨道
+                for (int t = 0; t < 4; t++)
+                {
+                    // 算出判定线到手指的向量
+                    float2 v = touchPos - trackInfos[t].EndPos;
+                    
+                    // 利用点乘(Dot)将距离拆分为横向偏移和纵向偏移
+                    float transDist = math.abs(math.dot(v, trackInfos[t].Norm)); // 离轨道左右偏了多少
+                    float longDist = math.abs(math.dot(v, trackInfos[t].Dir));   // 离判定线上下偏了多少
+
+                    // 必须同时满足在一个“细长的长方形”区域内
+                    if (transDist <= maxTransverseDist && longDist <= maxLongitudinalDist)
+                    {
+                        // 如果同时在两个轨道的重合边缘，优先判定给横向更靠近的那条轨道
+                        if (transDist < minTransDist)
+                        {
+                            minTransDist = transDist;
+                            hitTrackId = t;
+                        }
+                    }
+                }
+
+                if (hitTrackId != -1)
+                {
+                    TryHitNote(hitTrackId, currentTime, ref ecb, ref processedEntities);
+                }
+            }
+        }
+
+        // 2. 电脑键盘检测
         for (int trackId = 0; trackId < trackKeys.Length; trackId++)
         {
             if (Input.GetKeyDown(trackKeys[trackId]))
             {
-                TryHitNote(trackId, currentTime, ref ecb);
+                TryHitNote(trackId, currentTime, ref ecb, ref processedEntities);
             }
         }
 
-        // ==========================================
-        // 3. 自动 Miss 检测 (放过未击打的音符)
-        // ==========================================
+        // 3. 自动 Miss 检测
         foreach (var (note, view, pos, entity) in SystemAPI.Query<RefRO<NoteComponent>, NoteViewComponent, RefRO<NotePosition>>().WithEntityAccess())
         {
+            if (processedEntities.Contains(entity)) continue;
+
             float timeDiff = note.ValueRO.TargetTime - currentTime;
             if (timeDiff < -0.15f)
             {
@@ -70,10 +142,11 @@ public partial class NoteInputSystem : SystemBase
 
         ecb.Playback(EntityManager);
         ecb.Dispose();
+        processedEntities.Dispose(); 
+        trackInfos.Dispose(); 
     }
 
-    // 【重构】将判定逻辑抽离成独立方法，方便触摸和键盘共同调用
-    private void TryHitNote(int trackId, float currentTime, ref EntityCommandBuffer ecb)
+    private void TryHitNote(int trackId, float currentTime, ref EntityCommandBuffer ecb, ref NativeHashSet<Entity> processedEntities)
     {
         Entity earliestNote = Entity.Null;
         float minTargetTime = float.MaxValue;
@@ -86,8 +159,10 @@ public partial class NoteInputSystem : SystemBase
         {
             if (note.ValueRO.TrackId == trackId)
             {
+                if (processedEntities.Contains(entity)) continue;
+
                 float timeDiff = note.ValueRO.TargetTime - currentTime;
-                if (timeDiff >= -0.15f && timeDiff <= 0.20f)
+                if (timeDiff >= -0.15f && timeDiff <= 0.2f)
                 {
                     if (note.ValueRO.TargetTime < minTargetTime)
                     {
@@ -104,7 +179,10 @@ public partial class NoteInputSystem : SystemBase
 
         if (earliestNote != Entity.Null)
         {
-            JudgeHit(hitTimeDiff, hitShape, hitPos);
+            processedEntities.Add(earliestNote);
+
+            try { JudgeHit(hitTimeDiff, hitShape, hitPos); }
+            catch (System.Exception e) { Debug.LogWarning($"UI异常已拦截: {e.Message}"); }
 
             if (hitView != null && hitView.VisualTransform != null)
             {
@@ -142,9 +220,6 @@ public partial class NoteInputSystem : SystemBase
             SpriteRenderer sr = effectObj.GetComponent<SpriteRenderer>();
             if (sr != null) { sr.color = color; }
         }
-        catch (System.Exception e)
-        {
-            Debug.LogWarning($"获取打击特效失败: {e.Message}");
-        }
+        catch (System.Exception e) { Debug.LogWarning($"获取打击特效失败: {e.Message}"); }
     }
 }

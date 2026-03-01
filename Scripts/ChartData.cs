@@ -3,9 +3,8 @@ using System.Collections.Generic;
 [System.Serializable]
 public class ChartUIConfig
 {
-    public bool hideCombo = false;           // 是否强制隐藏 COMBO
+    public bool hideCombo = false;
     public bool disableComplete = false;
-    // 未来还可以加：背景图名、主题色等...
 }
 
 [System.Serializable]
@@ -15,12 +14,11 @@ public class TrackData
     public float startX; public float startY;
     public float endX; public float endY;
     
-    // -- 新增：轨道视觉参数 --
-    public float width = 0.1f;       // 轨道粗细 (缩放)
-    public float opacity = 1.0f;     // 透明度 (0~1)
-    public bool isGlow = false;      // 是否发光
-    public float rotation = 0f;      // 整体旋转角度 (以起点为中心)
-    public int judgeShape = 0;       // 判定线形状 (0=默认圆, 1=方框等)
+    public float width = 0.1f;
+    public float opacity = 1.0f;
+    public bool isGlow = false;
+    public float rotation = 0f;
+    public int judgeShape = 0;
 
     public int curveType;
     public float amplitude;
@@ -36,16 +34,22 @@ public class NoteData
     public int type;
     public float speed;
     public bool isFake;
-
-    // -- 新增：音符视觉参数 --
-    public int shape = 0; // 音符形状 (0=默认圆, 1=方块, 2=特殊形状)
+    
+    public int shape = 0;
 }
 
 [System.Serializable]
 public class ChartData
 {
+    public string chartId = "default_01";
     public string songName = "Unknown Song";
+    public string artist = "Unknown Artist";
+    public float bpm = 120.0f;
     public float chartSpeed = 2.0f;
+    
+    public float musicVolume = 1.0f;
+    
+    public bool requireAudio = false;
     
     public ChartUIConfig uiConfig;
     

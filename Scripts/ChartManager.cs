@@ -32,8 +32,8 @@ public class ChartManager : MonoBehaviour
     public PoolableObject[] hitEffectPrefabs;
 
     [Header("材质配置")]
-    public Material normalMat; // 普通材质
-    public Material glowMat;   // 发光材质 (使用带 HDR 或 Emission 的材质)
+    public Material normalMat;
+    public Material glowMat;
 
     public ChartData currentChart;
 
@@ -50,7 +50,7 @@ public class ChartManager : MonoBehaviour
             {
                 if (notePrefabs[i] != null)
                 {
-                    ObjectPool.EnsurePrefabRegistered((RhythmPoolID)i, notePrefabs[i].gameObject, 20);
+                    ObjectPool.EnsurePrefabRegistered((RhythmPoolID)i, notePrefabs[i].gameObject, 200);
                 }
             }
         }
@@ -77,14 +77,17 @@ public class ChartManager : MonoBehaviour
         currentChart = JsonUtility.FromJson<ChartData>(chartJsonAsset.text);
         Debug.Log($"加载谱面：{currentChart.songName}");
         
-        // 将 JSON 存入 GameManager 以便 Restart 重玩时使用
-        GameManager.currentPlayingChart = chartJsonAsset;
-
-        // ... 原本 SpawnEntities() 里的所有代码原封不动地放在这里 ...
         if (currentChart == null) return;
         ScoreManager.Init(currentChart.notes.Count, currentChart.songName, currentChart.uiConfig);
 
         EntityManager entityManager = World.DefaultGameObjectInjectionWorld.EntityManager;
+        
+        EntityQuery noteQuery = entityManager.CreateEntityQuery(typeof(NoteComponent));
+        entityManager.DestroyEntity(noteQuery);
+        
+        EntityQuery trackQuery = entityManager.CreateEntityQuery(typeof(TrackComponent));
+        entityManager.DestroyEntity(trackQuery);
+        
         Dictionary<int, TrackData> trackDict = new Dictionary<int, TrackData>();
         
         // --- 生成轨迹 ---
@@ -140,14 +143,12 @@ public class ChartManager : MonoBehaviour
                     lr.SetPosition(0, new Vector3(track.startX, track.startY, 0));
                     lr.SetPosition(1, new Vector3(track.endX, track.endY, 0));
                 }
-
-                // 生成判定点指示器 (圆圈、方框等)
+                
                 if (judgeSprites != null && track.judgeShape >= 0 && track.judgeShape < judgeSprites.Length)
                 {
                     GameObject judgeObj = new GameObject("JudgeIndicator");
                     judgeObj.transform.SetParent(trackVisual.transform);
                     judgeObj.transform.position = new Vector3(track.endX, track.endY, 0);
-                    // 顺便让判定图也旋转对应的角度
                     judgeObj.transform.rotation = Quaternion.Euler(0, 0, track.rotation);
 
                     SpriteRenderer sr = judgeObj.AddComponent<SpriteRenderer>();
@@ -157,9 +158,8 @@ public class ChartManager : MonoBehaviour
                 }
             }
         }
-
-        // --- 生成音符 ---
-        float globalSpeedFactor = currentChart.chartSpeed / 2.0f;
+        
+        float globalSpeedFactor = (currentChart.chartSpeed * SettingsManager.Instance.GlobalScrollSpeed) / 2.0f;
 
         foreach (var note in currentChart.notes)
         {

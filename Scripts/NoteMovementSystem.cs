@@ -9,7 +9,7 @@ public partial class NoteMovementSystem : SystemBase
     {
         if (GameManager.Instance == null || GameManager.Instance.CurrentState != GameState.Playing) return;
         
-        float currentTime = GameManager.Instance.CurrentGameTime;
+        float currentTime = GameManager.Instance.CurrentVisualTime;
 
         foreach (var (note, pos, view) in SystemAPI.Query<RefRO<NoteComponent>, RefRW<NotePosition>, NoteViewComponent>())
         {
