@@ -79,13 +79,26 @@ public class UIManager : MonoBehaviour
     void Start() 
     { 
         if (playerNameText != null) playerNameText.text = "Aoalas"; 
+        
+        // 强制初始化 Slider 的极值范围，防止 Unity Editor 里默认 0~1 导致读取玩家配置时被暴力截断归位
+        if (volumeSlider != null) { volumeSlider.minValue = 0f; volumeSlider.maxValue = 1f; }
+        if (audioOffsetSlider != null) { audioOffsetSlider.minValue = -0.3f; audioOffsetSlider.maxValue = 0.3f; }
+        if (visualOffsetSlider != null) { visualOffsetSlider.minValue = -0.2f; visualOffsetSlider.maxValue = 0.2f; }
+        if (scrollSpeedSlider != null) { scrollSpeedSlider.minValue = 1.0f; scrollSpeedSlider.maxValue = 9.9f; }
+
+        RefreshSettingsUI();
+    }
+
+    public void RefreshSettingsUI()
+    {
         if (SettingsManager.Instance != null)
         {
-            if (volumeSlider != null) volumeSlider.value = SettingsManager.Instance.GlobalVolume;
-            if (audioOffsetSlider != null) audioOffsetSlider.value = SettingsManager.Instance.AudioOffset;
-            if (visualOffsetSlider != null) visualOffsetSlider.value = SettingsManager.Instance.VisualOffset;
-            if (pauseModeDropdown != null) pauseModeDropdown.value = SettingsManager.Instance.PauseMode;
-            if (scrollSpeedSlider != null) scrollSpeedSlider.value = SettingsManager.Instance.GlobalScrollSpeed;
+            // 使用 SetValueWithoutNotify 避免触发 OnValueChanged 导致死循环或错误覆盖存档
+            if (volumeSlider != null) volumeSlider.SetValueWithoutNotify(SettingsManager.Instance.GlobalVolume);
+            if (audioOffsetSlider != null) audioOffsetSlider.SetValueWithoutNotify(SettingsManager.Instance.AudioOffset);
+            if (visualOffsetSlider != null) visualOffsetSlider.SetValueWithoutNotify(SettingsManager.Instance.VisualOffset);
+            if (pauseModeDropdown != null) pauseModeDropdown.SetValueWithoutNotify(SettingsManager.Instance.PauseMode);
+            if (scrollSpeedSlider != null) scrollSpeedSlider.SetValueWithoutNotify(SettingsManager.Instance.GlobalScrollSpeed);
             
             UpdateSettingsInputs();
         }
@@ -110,7 +123,14 @@ public class UIManager : MonoBehaviour
     private void UpdatePanelVisibility(GameState state)
     {
         if (openingPanel != null) openingPanel.SetActive(state == GameState.Opening);
-        if (settingsPanel != null) settingsPanel.SetActive(state == GameState.Settings);
+        
+        if (settingsPanel != null) 
+        {
+            bool isSettings = (state == GameState.Settings);
+            settingsPanel.SetActive(isSettings);
+            if (isSettings) RefreshSettingsUI(); // 每次进设置界面保证 UI 与底层数据同步
+        }
+        
         if (creditsPanel != null) creditsPanel.SetActive(state == GameState.Credits);
         
         if (topInfoBar != null) topInfoBar.SetActive(state == GameState.MainMenu || state == GameState.SongSelect);
@@ -127,8 +147,7 @@ public class UIManager : MonoBehaviour
         }
     }
     
-
-    // 1. 供 Slider 和 Dropdown 滑动时调用
+    
     public void OnSettingsChanged()
     {
         if (SettingsManager.Instance != null)
@@ -138,7 +157,7 @@ public class UIManager : MonoBehaviour
                 audioOffsetSlider != null ? audioOffsetSlider.value : 0f,
                 visualOffsetSlider != null ? visualOffsetSlider.value : 0f,
                 pauseModeDropdown != null ? pauseModeDropdown.value : 0,
-                scrollSpeedSlider != null ? scrollSpeedSlider.value : 1f // 【新增】
+                scrollSpeedSlider != null ? scrollSpeedSlider.value : 1f
             );
             UpdateSettingsInputs();
         }
@@ -152,8 +171,7 @@ public class UIManager : MonoBehaviour
         if (scrollSpeedInput != null && scrollSpeedSlider != null) scrollSpeedInput.text = scrollSpeedSlider.value.ToString("0.0");
     }
 
-    // 2. 供 音量 InputField 输入完成时调用
-// 2. 供 音量 InputField 输入完成时调用
+
     public void OnVolumeInputEnded(string val)
     {
         if (float.TryParse(val, out float result))
@@ -163,13 +181,12 @@ public class UIManager : MonoBehaviour
         }
         else UpdateSettingsInputs();
     }
-
-    // 3. 供 音频偏移 InputField 输入完成时调用
+    
     public void OnAudioOffsetInputEnded(string val)
     {
         if (float.TryParse(val, out float result))
         {
-            float v = Mathf.Clamp(result / 1000f, -0.3f, 0.3f); // 输入毫秒，限制在正负 300ms
+            float v = Mathf.Clamp(result / 1000f, -0.3f, 0.3f);
             if (audioOffsetSlider != null) audioOffsetSlider.value = v;
         }
         else UpdateSettingsInputs();

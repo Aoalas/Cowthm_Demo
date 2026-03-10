@@ -9,13 +9,13 @@ public partial class NoteInputSystem : SystemBase
 {
     private readonly KeyCode[] trackKeys = new KeyCode[] { KeyCode.S, KeyCode.D, KeyCode.J, KeyCode.K };
 
-    // 定义一个轨道信息结构体，用于存储向量
+
     private struct TrackInfo
     {
         public float2 StartPos;
         public float2 EndPos;
-        public float2 Dir;  // 轨道方向向量
-        public float2 Norm; // 垂直于轨道的法向向量
+        public float2 Dir;
+        public float2 Norm;
     }
 
     protected override void OnUpdate()
@@ -27,12 +27,10 @@ public partial class NoteInputSystem : SystemBase
 
         NativeHashSet<Entity> processedEntities = new NativeHashSet<Entity>(32, Allocator.Temp);
 
-        // ==========================================
-        // 【核心数学升级】：计算每条轨道的方向向量与法向量
-        // ==========================================
+
         NativeArray<TrackInfo> trackInfos = new NativeArray<TrackInfo>(4, Allocator.Temp);
         
-        // 赋默认值防错
+
         for (int i = 0; i < 4; i++)
         {
             trackInfos[i] = new TrackInfo { 

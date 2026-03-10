@@ -25,6 +25,7 @@ public class GameManager : MonoBehaviour
     public static bool autoStartNextTime = false; 
     public static bool returnToSongSelect = false; 
     public static bool hasSeenOpening = false; 
+    public static bool JustFinishedOpening = false; // 【新增】用于标记刚开屏完，需要主界面执行淡入
     
     public static SongMetaData currentSong; 
 
@@ -94,7 +95,7 @@ public class GameManager : MonoBehaviour
     public void GoToCredits() { ChangeState(GameState.Credits); }
     public void BackToMainMenu() { ChangeState(GameState.MainMenu); }
 
-    public void FinishOpening() { ChangeState(GameState.MainMenu); } 
+    public void FinishOpening() { JustFinishedOpening = true; ChangeState(GameState.MainMenu); } 
     public void GoToSongSelect() { ChangeState(GameState.SongSelect); }
     
     public void StartGame() 
