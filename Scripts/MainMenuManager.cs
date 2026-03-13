@@ -9,13 +9,11 @@ public class MainMenuManager : MonoBehaviour
 {
     [Header("UI 动画组件引用")]
     public CanvasGroup bgBlurPanel;
-    public CanvasGroup topBar;
     public MainMenuButton[] menuButtons;
     public CanvasGroup sideIllustration; // 新增：右侧滑入的立绘插图
 
     // 保存初始位置
     private Vector2[] originalBtnPos;
-    private Vector2 originalTopBarPos;
     private Vector2 originalIllusPos;    // 新增：立绘初始位置
 
     void Awake()
@@ -34,12 +32,6 @@ public class MainMenuManager : MonoBehaviour
                 }
             }
         }
-
-        if (topBar != null)
-        {
-            originalTopBarPos = topBar.GetComponent<RectTransform>().anchoredPosition;
-        }
-
         if (sideIllustration != null)
         {
             originalIllusPos = sideIllustration.GetComponent<RectTransform>().anchoredPosition;
@@ -55,31 +47,27 @@ public class MainMenuManager : MonoBehaviour
         
         if (bgBlurPanel != null) bgBlurPanel.alpha = 1f;
         
-        if (topBar != null) 
-        {
-            topBar.alpha = 0f;
-            // 向上偏移 50 像素
-            topBar.GetComponent<RectTransform>().anchoredPosition = new Vector2(originalTopBarPos.x, originalTopBarPos.y + 50f);
-        }
+        bool isFromOpening = GameManager.JustFinishedOpening;
         
         for (int i = 0; i < menuButtons.Length; i++)
         {
             if (menuButtons[i] != null)
             {
                 var cg = menuButtons[i].GetComponent<CanvasGroup>();
-                cg.alpha = 0.3f;
-                // 改为屏幕最外侧很远的距离，比如向左偏移极大，实现完全从外部滑入 (-1000f)
-                menuButtons[i].GetComponent<RectTransform>().anchoredPosition = new Vector2(originalBtnPos[i].x - 1200f, originalBtnPos[i].y);
+                cg.alpha = isFromOpening ? 0.3f : 1f;
+                float startX = isFromOpening ? originalBtnPos[i].x - 1200f : originalBtnPos[i].x;
+                menuButtons[i].GetComponent<RectTransform>().anchoredPosition = new Vector2(startX, originalBtnPos[i].y);
             }
         }
 
         if (sideIllustration != null)
         {
-            sideIllustration.alpha = 0.3f;
-            sideIllustration.GetComponent<RectTransform>().anchoredPosition = new Vector2(originalIllusPos.x + 650f, originalIllusPos.y);
+            sideIllustration.alpha = isFromOpening ? 0.3f : 1f;
+            float startX = isFromOpening ? originalIllusPos.x + 650f : originalIllusPos.x;
+            sideIllustration.GetComponent<RectTransform>().anchoredPosition = new Vector2(startX, originalIllusPos.y);
         }
 
-        if (GameManager.JustFinishedOpening)
+        if (isFromOpening)
         {
             GameManager.JustFinishedOpening = false;
             
@@ -104,7 +92,7 @@ public class MainMenuManager : MonoBehaviour
             StartCoroutine(FadeOutBlackScreen(cg, tempBlackObj));
         }
         
-        StartCoroutine(PlayEntranceSequence());
+        StartCoroutine(PlayEntranceSequence(isFromOpening));
     }
 
     private void StopFloatingAnims()
@@ -141,39 +129,41 @@ public class MainMenuManager : MonoBehaviour
         if (obj != null) Destroy(obj);
     }
 
-    private IEnumerator PlayEntranceSequence()
+    private IEnumerator PlayEntranceSequence(bool isFromOpening)
     {
-        if (bgBlurPanel != null)
+        if (isFromOpening && bgBlurPanel != null)
         {
             (0.01f / bgBlurPanel.MSineOut(x => x.alpha, 1f.ToThis())).Play();
             yield return new WaitForSeconds(0.3f);
         }
         
-        if (topBar != null)
-        {
-            var topRect = topBar.GetComponent<RectTransform>();
-            MAni.Make(
-                0.4f / topBar.MSineOut(x => x.alpha, 1f.ToThis()),
-                0.4f / topRect.MBackOut(x => x.anchoredPosition, originalTopBarPos.ToThis()) // MBackOut 带有弹性
-            ).Play();
-        }
-        
         if (sideIllustration != null)
         {
             var animRect = sideIllustration.GetComponent<RectTransform>();
-            MAni.Make(
-                0.8f / sideIllustration.MSineOut(x => x.alpha, 1f.ToThis()),
-                0.4f / animRect.MSineOut(x => x.anchoredPosition, originalIllusPos.ToThis()) // 从右侧弹入
-            ).Play(() => {
-                // 滑入完毕后，增加轻微的上下漂浮呼吸效果
+            if (isFromOpening)
+            {
+                MAni.Make(
+                    0.8f / sideIllustration.MSineOut(x => x.alpha, 1f.ToThis()),
+                    0.4f / animRect.MSineOut(x => x.anchoredPosition, originalIllusPos.ToThis()) // 从右侧弹入
+                ).Play(() => {
+                    illusFloatingAnim = MAni.Make(
+                        2.0f / animRect.MSineIO(x => x.anchoredPosition, (originalIllusPos + new Vector2(0f, -15f)).ToThis())
+                    ).Then(
+                        2.0f / animRect.MSineIO(x => x.anchoredPosition, originalIllusPos.ToThis())
+                    ).EnableLooping();
+                    illusFloatingAnim.Play();
+                });
+                yield return new WaitForSeconds(0.2f);
+            }
+            else
+            {
                 illusFloatingAnim = MAni.Make(
                     2.0f / animRect.MSineIO(x => x.anchoredPosition, (originalIllusPos + new Vector2(0f, -15f)).ToThis())
                 ).Then(
                     2.0f / animRect.MSineIO(x => x.anchoredPosition, originalIllusPos.ToThis())
                 ).EnableLooping();
                 illusFloatingAnim.Play();
-            });
-            yield return new WaitForSeconds(0.2f);
+            }
         }
         
         if (floatingAnims == null || floatingAnims.Length != menuButtons.Length) 
@@ -188,21 +178,30 @@ public class MainMenuManager : MonoBehaviour
                 var targetPos = originalBtnPos[i];
                 var index = i; // 捕获循环变量
 
-                MAni.Make(
-                    0.3f / cg.MSineOut(x => x.alpha, 1f.ToThis()),
-                    0.6f / rect.MBackOut(x => x.anchoredPosition, targetPos.ToThis()) // 滑入
-                ).Play(() => {
-                    // 入场到位后，开始微妙的周期飘动动画
+                if (isFromOpening)
+                {
+                    MAni.Make(
+                        0.3f / cg.MSineOut(x => x.alpha, 1f.ToThis()),
+                        0.6f / rect.MBackOut(x => x.anchoredPosition, targetPos.ToThis()) // 滑入
+                    ).Play(() => {
+                        floatingAnims[index] = MAni.Make(
+                            1.5f / rect.MSineIO(x => x.anchoredPosition, (targetPos + new Vector2(8f, 0f)).ToThis())
+                        ).Then(
+                            1.5f / rect.MSineIO(x => x.anchoredPosition, targetPos.ToThis())
+                        ).EnableLooping();
+                        floatingAnims[index].Play();
+                    });
+                    yield return new WaitForSeconds(0.12f);
+                }
+                else
+                {
                     floatingAnims[index] = MAni.Make(
                         1.5f / rect.MSineIO(x => x.anchoredPosition, (targetPos + new Vector2(8f, 0f)).ToThis())
                     ).Then(
                         1.5f / rect.MSineIO(x => x.anchoredPosition, targetPos.ToThis())
                     ).EnableLooping();
-                    
                     floatingAnims[index].Play();
-                });
-                
-                yield return new WaitForSeconds(0.12f);
+                }
             }
         }
     }

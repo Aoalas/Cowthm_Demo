@@ -46,6 +46,7 @@ public class ChartData
     public string artist = "Unknown Artist";
     public float bpm = 120.0f;
     public float chartSpeed = 2.0f;
+    public float difficulty = -1000f; // 难度定数，默认-1000用于检测是否未填写
     
     public float musicVolume = 1.0f;
     

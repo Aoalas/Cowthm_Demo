@@ -10,7 +10,8 @@ public class SongMetaData
     public string artist;
     public Sprite coverArt;
     public TextAsset chartJson; 
-    public AudioClip songAudio; // 【新增】绑定的音频文件
+    public AudioClip songAudio;
+    public float difficulty;
 }
 
 public class GameManager : MonoBehaviour

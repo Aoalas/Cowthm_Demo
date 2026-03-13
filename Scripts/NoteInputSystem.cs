@@ -62,9 +62,13 @@ public partial class NoteInputSystem : SystemBase
         
 
 
-        float maxTransverseDist = 1.20f; 
+        // 【横向判定宽度】：离轨道左右偏了多少算作这根轨道。数值越大，左右判定越宽松。
+        float maxTransverseDist = 2.20f; 
         
-        // 纵向长度：沿着轨道方向的距离。设为 2.5 甚至 3.0，
+        // 【纵向判定长度】：沿着轨道方向上下的判定距离。
+        
+        
+        
         float maxLongitudinalDist = 6.0f; 
 
         // 移动端多点触控精准检测

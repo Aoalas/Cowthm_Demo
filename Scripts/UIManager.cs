@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using TMPro;
 using Milease.DSL;
 using System.Collections;
+using Milease.Core.Animator;
 
 public class UIManager : MonoBehaviour
 {
@@ -80,11 +81,24 @@ public class UIManager : MonoBehaviour
     { 
         if (playerNameText != null) playerNameText.text = "Aoalas"; 
         
-        // 强制初始化 Slider 的极值范围，防止 Unity Editor 里默认 0~1 导致读取玩家配置时被暴力截断归位
         if (volumeSlider != null) { volumeSlider.minValue = 0f; volumeSlider.maxValue = 1f; }
         if (audioOffsetSlider != null) { audioOffsetSlider.minValue = -0.3f; audioOffsetSlider.maxValue = 0.3f; }
         if (visualOffsetSlider != null) { visualOffsetSlider.minValue = -0.2f; visualOffsetSlider.maxValue = 0.2f; }
         if (scrollSpeedSlider != null) { scrollSpeedSlider.minValue = 1.0f; scrollSpeedSlider.maxValue = 9.9f; }
+
+        if (topInfoBar != null)
+        {
+            originalTopBarPos = topInfoBar.GetComponent<RectTransform>().anchoredPosition;
+            
+            // 永远保持前置：赋予独立的 Canvas 并修改 Sorting Order
+            Canvas canvas = topInfoBar.GetComponent<Canvas>();
+            if (canvas == null) canvas = topInfoBar.AddComponent<Canvas>();
+            canvas.overrideSorting = true;
+            canvas.sortingOrder = 99; // 给一个极高的层级，确保在其他 UI 和黑屏面板之上
+            
+            GraphicRaycaster gr = topInfoBar.GetComponent<GraphicRaycaster>();
+            if (gr == null) topInfoBar.AddComponent<GraphicRaycaster>();
+        }
 
         RefreshSettingsUI();
     }
@@ -108,8 +122,9 @@ public class UIManager : MonoBehaviour
     {
         if (GameManager.Instance != null && GameManager.Instance.CurrentState != lastState)
         {
+            GameState previousState = lastState;
             lastState = GameManager.Instance.CurrentState;
-            UpdatePanelVisibility(lastState);
+            UpdatePanelVisibility(lastState, previousState);
         }
 
         if (displayScore < targetScore)
@@ -120,7 +135,10 @@ public class UIManager : MonoBehaviour
         }
     }
 
-    private void UpdatePanelVisibility(GameState state)
+    private MilInstantAnimator topBarAnim;
+    private Vector2 originalTopBarPos;
+
+    private void UpdatePanelVisibility(GameState state, GameState prevState)
     {
         if (openingPanel != null) openingPanel.SetActive(state == GameState.Opening);
         
@@ -128,12 +146,39 @@ public class UIManager : MonoBehaviour
         {
             bool isSettings = (state == GameState.Settings);
             settingsPanel.SetActive(isSettings);
-            if (isSettings) RefreshSettingsUI(); // 每次进设置界面保证 UI 与底层数据同步
+            if (isSettings) RefreshSettingsUI(); 
         }
         
         if (creditsPanel != null) creditsPanel.SetActive(state == GameState.Credits);
         
-        if (topInfoBar != null) topInfoBar.SetActive(state == GameState.MainMenu || state == GameState.SongSelect);
+        bool isTopBarState = (state == GameState.MainMenu || state == GameState.SongSelect || state == GameState.Result);
+        bool wasTopBarState = (prevState == GameState.MainMenu || prevState == GameState.SongSelect || prevState == GameState.Result);
+        bool isInitialLoad = ((int)prevState == -1); // 捕获重新加载场景时的初始状态
+        
+        if (topInfoBar != null)
+        {
+            // 如果是在打歌画面，且来自于前一个有TopBar的界面或者是点击Restart直接重载进入打歌界面的情况
+            if (state == GameState.Playing && (wasTopBarState || isInitialLoad))
+            {
+                PlayTopBarExitAnim();
+            }
+            // 正常的非初始状态下切入有TopBar的界面（比如从游玩结束回到结算界面）
+            else if (isTopBarState && !wasTopBarState && !isInitialLoad)
+            {
+                topInfoBar.SetActive(true);
+                PlayTopBarEnterAnim();
+            }
+            // 已经是TopBar的界面之间切换，或是从结算直接返回选曲导致重新加载场景
+            else if (isTopBarState && (wasTopBarState || isInitialLoad))
+            {
+                topInfoBar.SetActive(true);
+            }
+            else if (!isTopBarState && state != GameState.Playing)
+            {
+                topInfoBar.SetActive(false);
+            }
+        }
+        
         if (mainMenuPanel != null) mainMenuPanel.SetActive(state == GameState.MainMenu);
         if (songSelectPanel != null) songSelectPanel.SetActive(state == GameState.SongSelect);
         if (gameplayPanel != null) gameplayPanel.SetActive(state == GameState.Playing);
@@ -145,6 +190,41 @@ public class UIManager : MonoBehaviour
             resultPanel.SetActive(isResult);
             if (isResult) StartCoroutine(ShowResultUIAnimation());
         }
+    }
+
+    private void PlayTopBarEnterAnim()
+    {
+        var cg = topInfoBar.GetComponent<CanvasGroup>();
+        if (cg == null) cg = topInfoBar.AddComponent<CanvasGroup>();
+        var rect = topInfoBar.GetComponent<RectTransform>();
+        
+        if (topBarAnim != null) topBarAnim.Stop();
+        
+        cg.alpha = 0f;
+        rect.anchoredPosition = new Vector2(originalTopBarPos.x, originalTopBarPos.y + 50f);
+        
+        topBarAnim = MAni.Make(
+            0.4f / cg.MSineOut(x => x.alpha, 1f.ToThis()),
+            0.4f / rect.MBackOut(x => x.anchoredPosition, originalTopBarPos.ToThis())
+        );
+        topBarAnim.Play();
+    }
+
+    private void PlayTopBarExitAnim()
+    {
+        var cg = topInfoBar.GetComponent<CanvasGroup>();
+        if (cg == null) cg = topInfoBar.AddComponent<CanvasGroup>();
+        var rect = topInfoBar.GetComponent<RectTransform>();
+        
+        if (topBarAnim != null) topBarAnim.Stop();
+        
+        topBarAnim = MAni.Make(
+            0.3f / cg.MSineOut(x => x.alpha, 0f.ToThis()),
+            0.3f / rect.MSineOut(x => x.anchoredPosition, new Vector2(originalTopBarPos.x, originalTopBarPos.y + 50f).ToThis())
+        );
+        topBarAnim.Play(() => {
+            topInfoBar.SetActive(false);
+        });
     }
     
     
@@ -191,13 +271,12 @@ public class UIManager : MonoBehaviour
         }
         else UpdateSettingsInputs();
     }
-
-    // 4. 供 视觉偏移 InputField 输入完成时调用
+    
     public void OnVisualOffsetInputEnded(string val)
     {
         if (float.TryParse(val, out float result))
         {
-            float v = Mathf.Clamp(result / 1000f, -0.2f, 0.2f); // 输入毫秒，限制在正负 200ms
+            float v = Mathf.Clamp(result / 1000f, -0.2f, 0.2f);
             if (visualOffsetSlider != null) visualOffsetSlider.value = v;
         }
         else UpdateSettingsInputs();
@@ -222,7 +301,6 @@ public class UIManager : MonoBehaviour
     {
         if (float.TryParse(val, out float result))
         {
-            // 限制在 1.0 到 9.9 之间
             float v = Mathf.Clamp(result, 1.0f, 9.9f); 
             if (scrollSpeedSlider != null) scrollSpeedSlider.value = v;
         }
